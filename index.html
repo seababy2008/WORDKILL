@@ -87,14 +87,14 @@
             border-color: #4299e1;
             background: #ebf8ff;
         }
-        .word-btn.error {
+        .word-btn.error, .meaning-btn.error {
             border-color: #fc8181;
             background: #fff5f5;
             color: #742a2a;
             cursor: not-allowed;
             opacity: 0.7;
         }
-        .meaning-btn.wrong-flash {
+        .word-btn.wrong-flash, .meaning-btn.wrong-flash {
             border-color: #fc8181;
             background: #fff5f5;
             color: #742a2a;
@@ -108,21 +108,7 @@
             min-height: 20px;
         }
         .result-text strong { color: #2b6cb0; }
-        .next-btn {
-            margin-top: 12px;
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 12px;
-            background: #48bb78;
-            color: #fff;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .hidden { display: none; }
 
-        /* 分数弹窗 */
         .modal-mask {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -173,7 +159,7 @@
 <body>
     <div class="card">
         <h1>WordKill 背单词</h1>
-        <p class="subtitle">给左边的单词，点选右边对应的中文</p>
+        <p class="subtitle">先点单词或中文，再点另一侧配对</p>
 
         <div class="progress-bar">
             <div class="progress-fill" id="progressFill"></div>
@@ -191,7 +177,6 @@
         <div class="result-text" id="resultText"></div>
     </div>
 
-    <!-- 分数弹窗 -->
     <div class="modal-mask hidden" id="modalMask">
         <div class="modal">
             <div class="score-label">本轮得分</div>
@@ -252,17 +237,21 @@
 
         // ============ 本轮状态 ============
         let currentRound = [];
-        let matchedPairs = {};
-        let attemptedWords = {};
-        let selectedWordBtn = null;
-        let selectedWord = null;
+        let matchedPairs = {};        // { word: meaning }
+        let attemptedWords = {};      // 已完成的单词
+        let selectedSide = null;      // "word" 或 "meaning"，记录先选的是哪边
+        let selectedWord = null;      // 先选单词时有值
+        let selectedMeaning = null;   // 先选中文时有值
+        let selectedBtn = null;       // 选中按钮的 DOM
 
         // ============ 生成一轮 ============
         function generateRound() {
             matchedPairs = {};
             attemptedWords = {};
-            selectedWordBtn = null;
+            selectedSide = null;
             selectedWord = null;
+            selectedMeaning = null;
+            selectedBtn = null;
             document.getElementById("resultText").textContent = "";
             updateProgressFill(0);
 
@@ -292,54 +281,123 @@
             });
         }
 
+        function clearSelection() {
+            if (selectedBtn) selectedBtn.classList.remove("selected");
+            selectedSide = null;
+            selectedWord = null;
+            selectedMeaning = null;
+            selectedBtn = null;
+        }
+
         // ============ 选中单词 ============
         function selectWord(btn, word) {
             if (btn.classList.contains("matched")) return;
             if (btn.classList.contains("error")) return;
-            if (selectedWordBtn) selectedWordBtn.classList.remove("selected");
-            selectedWordBtn = btn;
+
+            // 已有中文选中 → 点击单词 = 配对判定
+            if (selectedSide === "meaning") {
+                judgePair(word, selectedMeaning, "meaning");
+                return;
+            }
+
+            if (selectedSide === "word" && selectedWord === word) {
+                clearSelection();
+                return;
+            }
+
+            clearSelection();
+            selectedSide = "word";
             selectedWord = word;
+            selectedBtn = btn;
             btn.classList.add("selected");
         }
 
         // ============ 选中中文 ============
         function selectMeaning(btn) {
             if (btn.classList.contains("matched")) return;
-            if (!selectedWord) return;
+            if (btn.classList.contains("error")) return;
 
-            const chosenMeaning = btn.dataset.meaning;
-            const correctMeaning = currentRound.find(item => item.word === selectedWord).meaning;
+            const meaning = btn.dataset.meaning;
 
-            if (chosenMeaning === correctMeaning) {
-                selectedWordBtn.classList.remove("selected");
-                selectedWordBtn.classList.add("matched");
-                btn.classList.add("matched");
-                matchedPairs[selectedWord] = chosenMeaning;
-                attemptedWords[selectedWord] = true;
-                selectedWordBtn = null;
-                selectedWord = null;
-            } else {
-                const wordBtn = selectedWordBtn;
-                wordBtn.classList.remove("selected");
-                wordBtn.classList.add("error");
-                wordBtn.disabled = true;
-                attemptedWords[selectedWord] = true;
-
-                btn.classList.add("wrong-flash");
-                setTimeout(() => btn.classList.remove("wrong-flash"), 500);
-
-                selectedWordBtn = null;
-                selectedWord = null;
+            // 已有单词选中 → 点击中文 = 配对判定
+            if (selectedSide === "word") {
+                judgePair(selectedWord, meaning, "word");
+                return;
             }
 
-            updateProgressFill(Object.keys(attemptedWords).length / currentRound.length);
-            document.getElementById("resultText").textContent =
-                `已作答 ${Object.keys(attemptedWords).length} / ${currentRound.length}`;
+            if (selectedSide === "meaning" && selectedMeaning === meaning) {
+                clearSelection();
+                return;
+            }
 
-            checkRoundEnd();
+            clearSelection();
+            selectedSide = "meaning";
+            selectedMeaning = meaning;
+            selectedBtn = btn;
+            btn.classList.add("selected");
         }
 
-        // ============ 检查本轮是否结束 ============
+        // ============ 判定配对 ============
+        // firstSide: "word" 表示先选的是单词，失败时锁定单词
+        //            "meaning" 表示先选的是中文，失败时锁定中文
+        function judgePair(word, meaning, firstSide) {
+            const correctMeaning = currentRound.find(item => item.word === word).meaning;
+
+            if (meaning === correctMeaning) {
+                // 配对成功
+                const wordBtn = document.querySelector(`.word-btn[data-word="${word}"]`);
+                const meaningBtn = document.querySelector(`.meaning-btn[data-meaning="${meaning}"]`);
+                wordBtn.classList.remove("selected");
+                meaningBtn.classList.remove("selected");
+                wordBtn.classList.add("matched");
+                meaningBtn.classList.add("matched");
+
+                matchedPairs[word] = meaning;
+                attemptedWords[word] = true;
+                clearSelection();
+
+                updateProgressFill(Object.keys(attemptedWords).length / currentRound.length);
+                document.getElementById("resultText").textContent =
+                    `已作答 ${Object.keys(attemptedWords).length} / ${currentRound.length}`;
+
+                checkRoundEnd();
+            } else {
+                // 配对失败：先选的那一侧锁定为红色，另一侧闪烁后恢复
+                const wordBtn = document.querySelector(`.word-btn[data-word="${word}"]`);
+                const meaningBtn = document.querySelector(`.meaning-btn[data-meaning="${meaning}"]`);
+
+                if (firstSide === "word") {
+                    // 先选的单词：单词锁定，中文闪烁
+                    wordBtn.classList.remove("selected");
+                    wordBtn.classList.add("error");
+                    wordBtn.disabled = true;
+
+                    meaningBtn.classList.remove("selected");
+                    meaningBtn.classList.add("wrong-flash");
+                    setTimeout(() => meaningBtn.classList.remove("wrong-flash"), 500);
+                } else {
+                    // 先选的中文：中文锁定，单词闪烁
+                    meaningBtn.classList.remove("selected");
+                    meaningBtn.classList.add("error");
+                    meaningBtn.disabled = true;
+
+                    wordBtn.classList.remove("selected");
+                    wordBtn.classList.add("wrong-flash");
+                    setTimeout(() => wordBtn.classList.remove("wrong-flash"), 500);
+                }
+
+                // 不管锁定哪边，这一对单词就算完成
+                attemptedWords[word] = true;
+                clearSelection();
+
+                updateProgressFill(Object.keys(attemptedWords).length / currentRound.length);
+                document.getElementById("resultText").textContent =
+                    `已作答 ${Object.keys(attemptedWords).length} / ${currentRound.length}`;
+
+                checkRoundEnd();
+            }
+        }
+
         function checkRoundEnd() {
             if (Object.keys(attemptedWords).length === currentRound.length) {
                 finishRound();
@@ -369,11 +427,9 @@
             document.getElementById("resultText").innerHTML =
                 `本轮完成：正确 <strong>${correctCount} / ${total}</strong> 个`;
 
-            // 弹出分数
             showScoreModal(score, correctCount, total);
         }
 
-        // ============ 分数弹窗 ============
         function showScoreModal(score, correct, total) {
             document.getElementById("scoreValue").textContent = score;
             document.getElementById("scoreSub").textContent = `${correct} / ${total} 正确`;
@@ -393,12 +449,10 @@
             generateRound();
         }
 
-        // ============ 进度条 ============
         function updateProgressFill(ratio) {
             document.getElementById("progressFill").style.width = `${ratio * 100}%`;
         }
 
-        // ============ 启动 ============
         generateRound();
     </script>
 </body>
