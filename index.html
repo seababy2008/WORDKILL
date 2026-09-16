@@ -37,9 +37,11 @@
             transition: width 0.3s;
         }
 
+        /* 左右两列整体布局 */
         .match-grid {
             display: flex;
             gap: 12px;
+            align-items: flex-start;
         }
         .col {
             flex: 1;
@@ -52,10 +54,15 @@
             color: #a0aec0;
             text-align: center;
             margin-bottom: 2px;
+            /* 标题单独给高度，保证两列对齐 */
+            height: 18px;
+            line-height: 18px;
         }
 
+        /* 每个按钮固定高度，保证左右一一对应 */
         .word-btn, .meaning-btn {
-            padding: 12px 8px;
+            height: 48px;              /* 固定高度，左右一致 */
+            padding: 0 8px;
             border: 2px solid #e2e8f0;
             border-radius: 10px;
             background: #fff;
@@ -63,15 +70,16 @@
             cursor: pointer;
             transition: all 0.15s;
             color: #2d3748;
-            text-align: center;
-            min-height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .word-btn:hover, .meaning-btn:hover { border-color: #90cdf4; background: #ebf8ff; }
 
-        /* 已配对成功的颜色 */
+        /* 已配对成功 */
         .word-btn.matched, .meaning-btn.matched {
             border-color: #48bb78;
             background: #f0fff4;
@@ -84,8 +92,16 @@
             border-color: #4299e1;
             background: #ebf8ff;
         }
-        /* 配对错误闪烁 */
-        .word-btn.wrong-flash, .meaning-btn.wrong-flash {
+        /* 错误：单词变红且不可再选 */
+        .word-btn.error {
+            border-color: #fc8181;
+            background: #fff5f5;
+            color: #742a2a;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        /* 中文选错的临时闪烁 */
+        .meaning-btn.wrong-flash {
             border-color: #fc8181;
             background: #fff5f5;
             color: #742a2a;
@@ -94,13 +110,8 @@
             cursor: default;
         }
 
-        .submit-bar {
-            margin-top: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
         .result-text {
+            margin-top: 16px;
             text-align: center;
             font-size: 14px;
             color: #4a5568;
@@ -108,6 +119,8 @@
         }
         .result-text strong { color: #2b6cb0; }
         .next-btn {
+            margin-top: 12px;
+            width: 100%;
             padding: 12px;
             border: none;
             border-radius: 12px;
@@ -138,10 +151,8 @@
             </div>
         </div>
 
-        <div class="submit-bar">
-            <div class="result-text" id="resultText"></div>
-            <button class="next-btn hidden" id="nextBtn" onclick="generateRound()">再来一组</button>
-        </div>
+        <div class="result-text" id="resultText"></div>
+        <button class="next-btn hidden" id="nextBtn" onclick="generateRound()">再来一组</button>
     </div>
 
     <script>
@@ -194,13 +205,15 @@
 
         // ============ 本轮状态 ============
         let currentRound = [];
-        let matchedPairs = {};  // { word: meaning }
+        let matchedPairs = {};
+        let erroredWords = {};  // 标记哪些单词已经选错锁定了
         let selectedWordBtn = null;
         let selectedWord = null;
 
         // ============ 生成一轮 ============
         function generateRound() {
             matchedPairs = {};
+            erroredWords = {};
             selectedWordBtn = null;
             selectedWord = null;
             document.getElementById("resultText").textContent = "";
@@ -209,10 +222,9 @@
 
             currentRound = pickWeightedWords(QUESTIONS_PER_ROUND);
 
-            // 左列：单词（保持原顺序）
+            // 左列：单词
             const wordCol = document.getElementById("wordCol");
             wordCol.innerHTML = '<div class="col-title">单词</div>';
-
             currentRound.forEach(item => {
                 const btn = document.createElement("button");
                 btn.className = "word-btn";
@@ -226,7 +238,6 @@
             const shuffledMeanings = [...currentRound].sort(() => Math.random() - 0.5);
             const meaningCol = document.getElementById("meaningCol");
             meaningCol.innerHTML = '<div class="col-title">中文</div>';
-
             shuffledMeanings.forEach(item => {
                 const btn = document.createElement("button");
                 btn.className = "meaning-btn";
@@ -240,8 +251,8 @@
         // ============ 选中单词 ============
         function selectWord(btn, word) {
             if (btn.classList.contains("matched")) return;
+            if (btn.classList.contains("error")) return;  // 已选错的单词不能再选
 
-            // 取消之前选中
             if (selectedWordBtn) selectedWordBtn.classList.remove("selected");
 
             selectedWordBtn = btn;
@@ -252,13 +263,9 @@
         // ============ 选中中文 ============
         function selectMeaning(btn) {
             if (btn.classList.contains("matched")) return;
-            if (!selectedWord) {
-                // 没选单词就点了中文，忽略
-                return;
-            }
+            if (!selectedWord) return;
 
             const chosenMeaning = btn.dataset.meaning;
-            // 查找这个单词的正确释义
             const correctMeaning = currentRound.find(item => item.word === selectedWord).meaning;
 
             if (chosenMeaning === correctMeaning) {
@@ -275,24 +282,42 @@
                 document.getElementById("resultText").textContent =
                     `已配对 ${Object.keys(matchedPairs).length} / ${currentRound.length}`;
 
-                // 全部配对完成
                 if (Object.keys(matchedPairs).length === currentRound.length) {
                     finishRound();
                 }
             } else {
-                // 配对错误：闪一下红色
+                // 配对错误：单词锁定为红色不可再选，中文闪烁后恢复可选
+                const wordBtn = selectedWordBtn;
+
+                wordBtn.classList.remove("selected");
+                wordBtn.classList.add("error");
+                wordBtn.disabled = true;
+                erroredWords[selectedWord] = true;
+
                 btn.classList.add("wrong-flash");
-                selectedWordBtn.classList.add("wrong-flash");
                 setTimeout(() => {
                     btn.classList.remove("wrong-flash");
-                    if (selectedWordBtn) selectedWordBtn.classList.remove("wrong-flash");
                 }, 500);
+
+                // 清除选中状态，允许用户重新选另一个单词
+                selectedWordBtn = null;
+                selectedWord = null;
+
+                // 检查是否所有单词都已经配对或锁死
+                checkRoundEnd();
+            }
+        }
+
+        // ============ 检查本轮是否结束 ============
+        function checkRoundEnd() {
+            const totalResolved = Object.keys(matchedPairs).length + Object.keys(erroredWords).length;
+            if (totalResolved === currentRound.length) {
+                finishRound();
             }
         }
 
         // ============ 完成一轮 ============
         function finishRound() {
-            // 更新权重
             const progress = loadProgress();
             currentRound.forEach(item => {
                 const key = item.word;
@@ -307,8 +332,9 @@
             });
             saveProgress(progress);
 
+            const correctCount = Object.keys(matchedPairs).length;
             document.getElementById("resultText").innerHTML =
-                `本轮完成！答对的词下次出现概率会降低`;
+                `本轮完成：正确配对 <strong>${correctCount} / ${currentRound.length}</strong> 个`;
             document.getElementById("nextBtn").classList.remove("hidden");
         }
 
