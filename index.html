@@ -9,89 +9,127 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background: #f0f4f8;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            padding: 16px;
             min-height: 100vh;
-            padding: 20px;
         }
         .card {
             background: #fff;
-            border-radius: 20px;
-            padding: 30px 24px;
-            width: 100%;
-            max-width: 420px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-            text-align: center;
+            border-radius: 16px;
+            padding: 20px 16px;
+            max-width: 720px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
         }
-        h1 { font-size: 22px; color: #1a202c; margin-bottom: 4px; }
-        .subtitle { font-size: 13px; color: #a0aec0; margin-bottom: 24px; }
-        .word {
-            font-size: 36px;
+        h1 { font-size: 20px; color: #1a202c; text-align: center; margin-bottom: 4px; }
+        .subtitle { font-size: 12px; color: #a0aec0; text-align: center; margin-bottom: 16px; }
+        .progress-bar {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #4299e1;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .question-list { display: flex; flex-direction: column; gap: 16px; }
+        .question-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .question-header {
+            font-size: 18px;
             font-weight: 700;
             color: #2b6cb0;
-            margin: 16px 0 8px;
-            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
-        .hint { font-size: 13px; color: #a0aec0; margin-bottom: 20px; }
-        .options { display: flex; flex-direction: column; gap: 10px; }
+        .question-index {
+            font-size: 12px;
+            color: #a0aec0;
+            font-weight: 400;
+        }
+        .options { display: flex; flex-wrap: wrap; gap: 8px; }
         .option {
-            padding: 14px;
+            flex: 1 1 calc(50% - 8px);
+            padding: 10px 8px;
             border: 2px solid #e2e8f0;
-            border-radius: 12px;
+            border-radius: 10px;
             background: #fff;
-            font-size: 16px;
+            font-size: 14px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s;
             color: #2d3748;
         }
         .option:hover { border-color: #90cdf4; background: #ebf8ff; }
-        .option.correct { border-color: #48bb78; background: #f0fff4; color: #22543d; }
+        .option.correct { border-color: #48bb78; background: #f0fff4; color: #22543d; font-weight: 600; }
         .option.wrong { border-color: #fc8181; background: #fff5f5; color: #742a2a; }
         .option:disabled { cursor: default; }
-        .feedback { margin-top: 16px; font-size: 15px; font-weight: 600; min-height: 22px; }
-        .feedback.correct { color: #38a169; }
-        .feedback.wrong { color: #e53e3e; }
-        .progress {
+        .option:disabled:hover { border-color: #e2e8f0; background: #fff; }
+        .option.correct:disabled:hover { border-color: #48bb78; background: #f0fff4; }
+        .submit-bar {
             margin-top: 20px;
-            font-size: 13px;
-            color: #718096;
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            gap: 10px;
         }
-        .reset-btn {
-            margin-top: 20px;
-            padding: 10px 20px;
+        .submit-btn {
+            padding: 14px;
             border: none;
-            border-radius: 10px;
-            background: #edf2f7;
-            color: #4a5568;
-            font-size: 14px;
+            border-radius: 12px;
+            background: #4299e1;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
         }
-        .reset-btn:hover { background: #e2e8f0; }
+        .submit-btn:disabled { background: #a0aec0; cursor: default; }
+        .result-text {
+            text-align: center;
+            font-size: 14px;
+            color: #4a5568;
+            min-height: 20px;
+        }
+        .result-text strong { color: #2b6cb0; }
+        .next-btn {
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            background: #48bb78;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <div class="card">
         <h1>WordKill 背单词</h1>
-        <p class="subtitle">选择正确的中文释义</p>
+        <p class="subtitle" id="subtitle">一屏 10 题，选完点提交</p>
 
-        <div class="word" id="word">loading...</div>
-        <p class="hint" id="hint">点击下方选项作答</p>
-
-        <div class="options" id="options"></div>
-        <div class="feedback" id="feedback"></div>
-
-        <div class="progress">
-            <span id="progress-text">已掌握 0 / 0</span>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
         </div>
 
-        <button class="reset-btn" onclick="resetProgress()">重置进度</button>
+        <div class="question-list" id="questionList"></div>
+
+        <div class="submit-bar">
+            <div class="result-text" id="resultText"></div>
+            <button class="submit-btn" id="submitBtn" onclick="submitAll()">提交答案</button>
+            <button class="next-btn hidden" id="nextBtn" onclick="generateRound()">再来一组</button>
+        </div>
     </div>
 
     <script>
-        // ============ 词库（可自由增删） ============
+        // ============ 词库 ============
         const WORD_POOL = [
             { word: "apple", meaning: "苹果" },
             { word: "banana", meaning: "香蕉" },
@@ -102,127 +140,170 @@
             { word: "pineapple", meaning: "菠萝" },
             { word: "mango", meaning: "芒果" },
             { word: "peach", meaning: "桃子" },
-            { word: "cherry", meaning: "樱桃" }
+            { word: "cherry", meaning: "樱桃" },
+            { word: "lemon", meaning: "柠檬" },
+            { word: "coconut", meaning: "椰子" },
+            { word: "blueberry", meaning: "蓝莓" },
+            { word: "raspberry", meaning: "树莓" },
+            { word: "kiwi", meaning: "猕猴桃" }
         ];
 
-        // ============ 本地存储：进度和权重 ============
+        const QUESTIONS_PER_ROUND = 10; // 每轮题数，可改
         const STORAGE_KEY = "wordkill_progress";
 
+        // ============ 进度管理 ============
         function loadProgress() {
             try {
                 const raw = localStorage.getItem(STORAGE_KEY);
                 return raw ? JSON.parse(raw) : {};
-            } catch (e) {
-                return {};
-            }
+            } catch (e) { return {}; }
         }
 
         function saveProgress(data) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         }
 
-        // 权重规则：初始 1.0；答对 × 0.8；答错 × 1.2
         function getWeight(word, progress) {
             return progress[word] ? progress[word].weight : 1.0;
         }
 
-        // 加权随机抽取：权重越低，被抽中概率越小
-        function pickWeightedWord() {
+        // 加权随机抽 N 个不重复的词
+        function pickWeightedWords(n) {
             const progress = loadProgress();
-            const weights = WORD_POOL.map(item => getWeight(item.word, progress));
-            const total = weights.reduce((a, b) => a + b, 0);
-            let rand = Math.random() * total;
-            for (let i = 0; i < WORD_POOL.length; i++) {
-                rand -= weights[i];
-                if (rand <= 0) return WORD_POOL[i];
-            }
-            return WORD_POOL[0];
+            const pool = WORD_POOL.map(item => ({
+                ...item,
+                weight: getWeight(item.word, progress)
+            }));
+            // 按权重加权随机排序
+            const sorted = pool
+                .map(item => ({ ...item, rand: Math.random() / item.weight }))
+                .sort((a, b) => b.rand - a.rand)
+                .slice(0, Math.min(n, pool.length));
+            return sorted;
         }
 
-        // ============ 出题逻辑 ============
-        let currentWord = null;
-        let answered = false;
+        // ============ 本轮状态 ============
+        let currentRound = [];   // 本轮题目数据
+        let answers = {};        // 用户作答记录 { word: chosenWord }
+        let submitted = false;
 
-        function generateQuestion() {
-            answered = false;
-            document.getElementById("feedback").textContent = "";
-            document.getElementById("feedback").className = "feedback";
+        // ============ 生成一轮题目 ============
+        function generateRound() {
+            submitted = false;
+            answers = {};
+            document.getElementById("submitBtn").disabled = false;
+            document.getElementById("submitBtn").classList.remove("hidden");
+            document.getElementById("nextBtn").classList.add("hidden");
+            document.getElementById("resultText").textContent = "";
+            updateProgressFill(0);
 
-            currentWord = pickWeightedWord();
-            document.getElementById("word").textContent = currentWord.word;
+            // 抽取本轮单词
+            currentRound = pickWeightedWords(QUESTIONS_PER_ROUND);
 
-            // 生成 3 个干扰项（从其他词中随机选）
-            const others = WORD_POOL.filter(item => item.word !== currentWord.word);
-            const shuffled = others.sort(() => Math.random() - 0.5).slice(0, 3);
-            const options = [currentWord, ...shuffled].sort(() => Math.random() - 0.5);
+            const listEl = document.getElementById("questionList");
+            listEl.innerHTML = "";
 
-            const optionsEl = document.getElementById("options");
-            optionsEl.innerHTML = "";
-            options.forEach(opt => {
-                const btn = document.createElement("button");
-                btn.className = "option";
-                btn.textContent = opt.meaning;
-                btn.onclick = () => handleAnswer(btn, opt.word === currentWord.word);
-                optionsEl.appendChild(btn);
+            currentRound.forEach((item, index) => {
+                // 生成干扰项
+                const others = WORD_POOL.filter(w => w.word !== item.word);
+                const shuffled = others.sort(() => Math.random() - 0.5).slice(0, 3);
+                const options = [item, ...shuffled].sort(() => Math.random() - 0.5);
+
+                const questionEl = document.createElement("div");
+                questionEl.className = "question-item";
+
+                const header = document.createElement("div");
+                header.className = "question-header";
+                header.innerHTML = `<span>${item.word}</span><span class="question-index">第 ${index + 1} 题</span>`;
+                questionEl.appendChild(header);
+
+                const optionsEl = document.createElement("div");
+                optionsEl.className = "options";
+
+                options.forEach(opt => {
+                    const btn = document.createElement("button");
+                    btn.className = "option";
+                    btn.textContent = opt.meaning;
+                    btn.dataset.word = item.word;
+                    btn.dataset.meaning = opt.meaning;
+                    btn.onclick = () => handleSelect(btn, item.word, opt.meaning);
+                    optionsEl.appendChild(btn);
+                });
+
+                questionEl.appendChild(optionsEl);
+                listEl.appendChild(questionEl);
             });
-
-            updateProgressText();
         }
 
-        // ============ 答题反馈 ============
-        function handleAnswer(btn, isCorrect) {
-            if (answered) return;
-            answered = true;
+        // ============ 选择答案 ============
+        function handleSelect(btn, word, meaning) {
+            if (submitted) return;
 
+            // 同一题内只能选一个
+            const siblings = btn.parentElement.querySelectorAll(".option");
+            siblings.forEach(b => {
+                b.classList.remove("correct", "wrong");
+            });
+            btn.classList.add("correct");
+
+            answers[word] = meaning;
+            updateProgressFill(Object.keys(answers).length / currentRound.length);
+        }
+
+        // ============ 提交批改 ============
+        function submitAll() {
+            if (submitted) return;
+            if (Object.keys(answers).length < currentRound.length) {
+                alert(`还有 ${currentRound.length - Object.keys(answers).length} 题没选，请全部作答后再提交`);
+                return;
+            }
+
+            submitted = true;
             const progress = loadProgress();
-            const key = currentWord.word;
-            const oldWeight = getWeight(key, progress);
-            const newWeight = isCorrect ? oldWeight * 0.8 : oldWeight * 1.2;
+            let correctCount = 0;
 
-            progress[key] = {
-                weight: newWeight,
-                correct: (progress[key]?.correct || 0) + (isCorrect ? 1 : 0),
-                wrong: (progress[key]?.wrong || 0) + (isCorrect ? 0 : 1)
-            };
+            currentRound.forEach(item => {
+                const key = item.word;
+                const isCorrect = answers[key] === item.meaning;
+                if (isCorrect) correctCount++;
+
+                const oldWeight = getWeight(key, progress);
+                const newWeight = isCorrect ? oldWeight * 0.8 : oldWeight * 1.2;
+                progress[key] = {
+                    weight: newWeight,
+                    correct: (progress[key]?.correct || 0) + (isCorrect ? 1 : 0),
+                    wrong: (progress[key]?.wrong || 0) + (isCorrect ? 0 : 1)
+                };
+            });
             saveProgress(progress);
 
-            // 高亮选项
-            const allOptions = document.querySelectorAll(".option");
-            allOptions.forEach(b => {
-                b.disabled = true;
-                if (b.textContent === currentWord.meaning) b.classList.add("correct");
+            // 标记正误
+            document.querySelectorAll(".question-item").forEach((qEl, index) => {
+                const item = currentRound[index];
+                const buttons = qEl.querySelectorAll(".option");
+                buttons.forEach(btn => {
+                    btn.disabled = true;
+                    const isCorrectOption = btn.dataset.meaning === item.meaning;
+                    const isChosen = answers[item.word] === btn.dataset.meaning;
+                    btn.classList.remove("correct", "wrong");
+                    if (isCorrectOption) btn.classList.add("correct");
+                    if (isChosen && !isCorrectOption) btn.classList.add("wrong");
+                });
             });
-            if (!isCorrect) btn.classList.add("wrong");
 
-            const feedback = document.getElementById("feedback");
-            feedback.textContent = isCorrect ? "✅ 回答正确" : `❌ 正确答案是「${currentWord.meaning}」`;
-            feedback.className = "feedback " + (isCorrect ? "correct" : "wrong");
-
-            // 1.2 秒后自动出下一题
-            setTimeout(generateQuestion, 1200);
+            document.getElementById("resultText").innerHTML =
+                `本轮答对 <strong>${correctCount} / ${currentRound.length}</strong> 题，答对的词下次出现概率会降低`;
+            document.getElementById("submitBtn").classList.add("hidden");
+            document.getElementById("nextBtn").classList.remove("hidden");
         }
 
-        // ============ 进度显示 ============
-        function updateProgressText() {
-            const progress = loadProgress();
-            const mastered = WORD_POOL.filter(item => {
-                const w = getWeight(item.word, progress);
-                return w < 0.5; // 权重低于 0.5 视为已掌握
-            }).length;
-            document.getElementById("progress-text").textContent =
-                `已掌握 ${mastered} / ${WORD_POOL.length}`;
+        // ============ 进度条 ============
+        function updateProgressFill(ratio) {
+            document.getElementById("progressFill").style.width = `${ratio * 100}%`;
         }
 
-        // ============ 重置进度 ============
-        function resetProgress() {
-            if (confirm("确定要清空所有学习进度吗？")) {
-                localStorage.removeItem(STORAGE_KEY);
-                generateQuestion();
-            }
-        }
-       ///////////////////////////////////////
         // ============ 启动 ============
-        generateQuestion();
+        generateRound();
     </script>
 </body>
 </html>
