@@ -1,12 +1,228 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WordKill</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordKill 背单词</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 30px 24px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        h1 { font-size: 22px; color: #1a202c; margin-bottom: 4px; }
+        .subtitle { font-size: 13px; color: #a0aec0; margin-bottom: 24px; }
+        .word {
+            font-size: 36px;
+            font-weight: 700;
+            color: #2b6cb0;
+            margin: 16px 0 8px;
+            letter-spacing: 0.5px;
+        }
+        .hint { font-size: 13px; color: #a0aec0; margin-bottom: 20px; }
+        .options { display: flex; flex-direction: column; gap: 10px; }
+        .option {
+            padding: 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            background: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #2d3748;
+        }
+        .option:hover { border-color: #90cdf4; background: #ebf8ff; }
+        .option.correct { border-color: #48bb78; background: #f0fff4; color: #22543d; }
+        .option.wrong { border-color: #fc8181; background: #fff5f5; color: #742a2a; }
+        .option:disabled { cursor: default; }
+        .feedback { margin-top: 16px; font-size: 15px; font-weight: 600; min-height: 22px; }
+        .feedback.correct { color: #38a169; }
+        .feedback.wrong { color: #e53e3e; }
+        .progress {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #718096;
+            display: flex;
+            justify-content: space-between;
+        }
+        .reset-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            background: #edf2f7;
+            color: #4a5568;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .reset-btn:hover { background: #e2e8f0; }
+    </style>
 </head>
 <body>
-  <h1>WordKill 背单词</h1>
-  <p>部署成功！</p>
+    <div class="card">
+        <h1>WordKill 背单词</h1>
+        <p class="subtitle">选择正确的中文释义</p>
+
+        <div class="word" id="word">loading...</div>
+        <p class="hint" id="hint">点击下方选项作答</p>
+
+        <div class="options" id="options"></div>
+        <div class="feedback" id="feedback"></div>
+
+        <div class="progress">
+            <span id="progress-text">已掌握 0 / 0</span>
+        </div>
+
+        <button class="reset-btn" onclick="resetProgress()">重置进度</button>
+    </div>
+
+    <script>
+        // ============ 词库（可自由增删） ============
+        const WORD_POOL = [
+            { word: "apple", meaning: "苹果" },
+            { word: "banana", meaning: "香蕉" },
+            { word: "orange", meaning: "橙子" },
+            { word: "grape", meaning: "葡萄" },
+            { word: "watermelon", meaning: "西瓜" },
+            { word: "strawberry", meaning: "草莓" },
+            { word: "pineapple", meaning: "菠萝" },
+            { word: "mango", meaning: "芒果" },
+            { word: "peach", meaning: "桃子" },
+            { word: "cherry", meaning: "樱桃" }
+        ];
+
+        // ============ 本地存储：进度和权重 ============
+        const STORAGE_KEY = "wordkill_progress";
+
+        function loadProgress() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveProgress(data) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+
+        // 权重规则：初始 1.0；答对 × 0.8；答错 × 1.2
+        function getWeight(word, progress) {
+            return progress[word] ? progress[word].weight : 1.0;
+        }
+
+        // 加权随机抽取：权重越低，被抽中概率越小
+        function pickWeightedWord() {
+            const progress = loadProgress();
+            const weights = WORD_POOL.map(item => getWeight(item.word, progress));
+            const total = weights.reduce((a, b) => a + b, 0);
+            let rand = Math.random() * total;
+            for (let i = 0; i < WORD_POOL.length; i++) {
+                rand -= weights[i];
+                if (rand <= 0) return WORD_POOL[i];
+            }
+            return WORD_POOL[0];
+        }
+
+        // ============ 出题逻辑 ============
+        let currentWord = null;
+        let answered = false;
+
+        function generateQuestion() {
+            answered = false;
+            document.getElementById("feedback").textContent = "";
+            document.getElementById("feedback").className = "feedback";
+
+            currentWord = pickWeightedWord();
+            document.getElementById("word").textContent = currentWord.word;
+
+            // 生成 3 个干扰项（从其他词中随机选）
+            const others = WORD_POOL.filter(item => item.word !== currentWord.word);
+            const shuffled = others.sort(() => Math.random() - 0.5).slice(0, 3);
+            const options = [currentWord, ...shuffled].sort(() => Math.random() - 0.5);
+
+            const optionsEl = document.getElementById("options");
+            optionsEl.innerHTML = "";
+            options.forEach(opt => {
+                const btn = document.createElement("button");
+                btn.className = "option";
+                btn.textContent = opt.meaning;
+                btn.onclick = () => handleAnswer(btn, opt.word === currentWord.word);
+                optionsEl.appendChild(btn);
+            });
+
+            updateProgressText();
+        }
+
+        // ============ 答题反馈 ============
+        function handleAnswer(btn, isCorrect) {
+            if (answered) return;
+            answered = true;
+
+            const progress = loadProgress();
+            const key = currentWord.word;
+            const oldWeight = getWeight(key, progress);
+            const newWeight = isCorrect ? oldWeight * 0.8 : oldWeight * 1.2;
+
+            progress[key] = {
+                weight: newWeight,
+                correct: (progress[key]?.correct || 0) + (isCorrect ? 1 : 0),
+                wrong: (progress[key]?.wrong || 0) + (isCorrect ? 0 : 1)
+            };
+            saveProgress(progress);
+
+            // 高亮选项
+            const allOptions = document.querySelectorAll(".option");
+            allOptions.forEach(b => {
+                b.disabled = true;
+                if (b.textContent === currentWord.meaning) b.classList.add("correct");
+            });
+            if (!isCorrect) btn.classList.add("wrong");
+
+            const feedback = document.getElementById("feedback");
+            feedback.textContent = isCorrect ? "✅ 回答正确" : `❌ 正确答案是「${currentWord.meaning}」`;
+            feedback.className = "feedback " + (isCorrect ? "correct" : "wrong");
+
+            // 1.2 秒后自动出下一题
+            setTimeout(generateQuestion, 1200);
+        }
+
+        // ============ 进度显示 ============
+        function updateProgressText() {
+            const progress = loadProgress();
+            const mastered = WORD_POOL.filter(item => {
+                const w = getWeight(item.word, progress);
+                return w < 0.5; // 权重低于 0.5 视为已掌握
+            }).length;
+            document.getElementById("progress-text").textContent =
+                `已掌握 ${mastered} / ${WORD_POOL.length}`;
+        }
+
+        // ============ 重置进度 ============
+        function resetProgress() {
+            if (confirm("确定要清空所有学习进度吗？")) {
+                localStorage.removeItem(STORAGE_KEY);
+                generateQuestion();
+            }
+        }
+
+        // ============ 启动 ============
+        generateQuestion();
+    </script>
 </body>
 </html>
