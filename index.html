@@ -37,7 +37,6 @@
             transition: width 0.3s;
         }
 
-        /* 左右两列整体布局 */
         .match-grid {
             display: flex;
             gap: 12px;
@@ -54,14 +53,12 @@
             color: #a0aec0;
             text-align: center;
             margin-bottom: 2px;
-            /* 标题单独给高度，保证两列对齐 */
             height: 18px;
             line-height: 18px;
         }
 
-        /* 每个按钮固定高度，保证左右一一对应 */
         .word-btn, .meaning-btn {
-            height: 48px;              /* 固定高度，左右一致 */
+            height: 48px;
             padding: 0 8px;
             border: 2px solid #e2e8f0;
             border-radius: 10px;
@@ -79,7 +76,6 @@
         }
         .word-btn:hover, .meaning-btn:hover { border-color: #90cdf4; background: #ebf8ff; }
 
-        /* 已配对成功 */
         .word-btn.matched, .meaning-btn.matched {
             border-color: #48bb78;
             background: #f0fff4;
@@ -87,12 +83,10 @@
             font-weight: 600;
             cursor: default;
         }
-        /* 选中状态 */
         .word-btn.selected, .meaning-btn.selected {
             border-color: #4299e1;
             background: #ebf8ff;
         }
-        /* 错误：单词变红且不可再选 */
         .word-btn.error {
             border-color: #fc8181;
             background: #fff5f5;
@@ -100,14 +94,10 @@
             cursor: not-allowed;
             opacity: 0.7;
         }
-        /* 中文选错的临时闪烁 */
         .meaning-btn.wrong-flash {
             border-color: #fc8181;
             background: #fff5f5;
             color: #742a2a;
-        }
-        .word-btn:disabled, .meaning-btn:disabled {
-            cursor: default;
         }
 
         .result-text {
@@ -131,6 +121,53 @@
             cursor: pointer;
         }
         .hidden { display: none; }
+
+        /* 分数弹窗 */
+        .modal-mask {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .modal-mask.hidden { display: none; }
+        .modal {
+            background: #fff;
+            border-radius: 16px;
+            padding: 28px 24px;
+            width: 280px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            animation: pop 0.2s ease-out;
+        }
+        @keyframes pop {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal .score-label { font-size: 13px; color: #a0aec0; margin-bottom: 6px; }
+        .modal .score-value {
+            font-size: 42px;
+            font-weight: 800;
+            color: #2b6cb0;
+            line-height: 1.1;
+        }
+        .modal .score-sub { font-size: 13px; color: #718096; margin-top: 6px; }
+        .modal .score-tip { font-size: 13px; color: #4a5568; margin-top: 14px; }
+        .modal .modal-btn {
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            background: #4299e1;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .modal .modal-btn:hover { background: #3182ce; }
     </style>
 </head>
 <body>
@@ -152,7 +189,17 @@
         </div>
 
         <div class="result-text" id="resultText"></div>
-        <button class="next-btn hidden" id="nextBtn" onclick="generateRound()">再来一组</button>
+    </div>
+
+    <!-- 分数弹窗 -->
+    <div class="modal-mask hidden" id="modalMask">
+        <div class="modal">
+            <div class="score-label">本轮得分</div>
+            <div class="score-value" id="scoreValue">0</div>
+            <div class="score-sub" id="scoreSub">0 / 10</div>
+            <div class="score-tip" id="scoreTip"></div>
+            <button class="modal-btn" onclick="closeModal()">再来一组</button>
+        </div>
     </div>
 
     <script>
@@ -206,23 +253,21 @@
         // ============ 本轮状态 ============
         let currentRound = [];
         let matchedPairs = {};
-        let erroredWords = {};  // 标记哪些单词已经选错锁定了
+        let attemptedWords = {};
         let selectedWordBtn = null;
         let selectedWord = null;
 
         // ============ 生成一轮 ============
         function generateRound() {
             matchedPairs = {};
-            erroredWords = {};
+            attemptedWords = {};
             selectedWordBtn = null;
             selectedWord = null;
             document.getElementById("resultText").textContent = "";
-            document.getElementById("nextBtn").classList.add("hidden");
             updateProgressFill(0);
 
             currentRound = pickWeightedWords(QUESTIONS_PER_ROUND);
 
-            // 左列：单词
             const wordCol = document.getElementById("wordCol");
             wordCol.innerHTML = '<div class="col-title">单词</div>';
             currentRound.forEach(item => {
@@ -234,7 +279,6 @@
                 wordCol.appendChild(btn);
             });
 
-            // 右列：中文（打乱顺序）
             const shuffledMeanings = [...currentRound].sort(() => Math.random() - 0.5);
             const meaningCol = document.getElementById("meaningCol");
             meaningCol.innerHTML = '<div class="col-title">中文</div>';
@@ -251,10 +295,8 @@
         // ============ 选中单词 ============
         function selectWord(btn, word) {
             if (btn.classList.contains("matched")) return;
-            if (btn.classList.contains("error")) return;  // 已选错的单词不能再选
-
+            if (btn.classList.contains("error")) return;
             if (selectedWordBtn) selectedWordBtn.classList.remove("selected");
-
             selectedWordBtn = btn;
             selectedWord = word;
             btn.classList.add("selected");
@@ -269,49 +311,37 @@
             const correctMeaning = currentRound.find(item => item.word === selectedWord).meaning;
 
             if (chosenMeaning === correctMeaning) {
-                // 配对成功
                 selectedWordBtn.classList.remove("selected");
                 selectedWordBtn.classList.add("matched");
                 btn.classList.add("matched");
                 matchedPairs[selectedWord] = chosenMeaning;
-
+                attemptedWords[selectedWord] = true;
                 selectedWordBtn = null;
                 selectedWord = null;
-
-                updateProgressFill(Object.keys(matchedPairs).length / currentRound.length);
-                document.getElementById("resultText").textContent =
-                    `已配对 ${Object.keys(matchedPairs).length} / ${currentRound.length}`;
-
-                if (Object.keys(matchedPairs).length === currentRound.length) {
-                    finishRound();
-                }
             } else {
-                // 配对错误：单词锁定为红色不可再选，中文闪烁后恢复可选
                 const wordBtn = selectedWordBtn;
-
                 wordBtn.classList.remove("selected");
                 wordBtn.classList.add("error");
                 wordBtn.disabled = true;
-                erroredWords[selectedWord] = true;
+                attemptedWords[selectedWord] = true;
 
                 btn.classList.add("wrong-flash");
-                setTimeout(() => {
-                    btn.classList.remove("wrong-flash");
-                }, 500);
+                setTimeout(() => btn.classList.remove("wrong-flash"), 500);
 
-                // 清除选中状态，允许用户重新选另一个单词
                 selectedWordBtn = null;
                 selectedWord = null;
-
-                // 检查是否所有单词都已经配对或锁死
-                checkRoundEnd();
             }
+
+            updateProgressFill(Object.keys(attemptedWords).length / currentRound.length);
+            document.getElementById("resultText").textContent =
+                `已作答 ${Object.keys(attemptedWords).length} / ${currentRound.length}`;
+
+            checkRoundEnd();
         }
 
         // ============ 检查本轮是否结束 ============
         function checkRoundEnd() {
-            const totalResolved = Object.keys(matchedPairs).length + Object.keys(erroredWords).length;
-            if (totalResolved === currentRound.length) {
+            if (Object.keys(attemptedWords).length === currentRound.length) {
                 finishRound();
             }
         }
@@ -333,9 +363,34 @@
             saveProgress(progress);
 
             const correctCount = Object.keys(matchedPairs).length;
+            const total = currentRound.length;
+            const score = Math.round((correctCount / total) * 100);
+
             document.getElementById("resultText").innerHTML =
-                `本轮完成：正确配对 <strong>${correctCount} / ${currentRound.length}</strong> 个`;
-            document.getElementById("nextBtn").classList.remove("hidden");
+                `本轮完成：正确 <strong>${correctCount} / ${total}</strong> 个`;
+
+            // 弹出分数
+            showScoreModal(score, correctCount, total);
+        }
+
+        // ============ 分数弹窗 ============
+        function showScoreModal(score, correct, total) {
+            document.getElementById("scoreValue").textContent = score;
+            document.getElementById("scoreSub").textContent = `${correct} / ${total} 正确`;
+
+            let tip = "";
+            if (score === 100) tip = "太棒了，全对！🎉";
+            else if (score >= 80) tip = "不错，继续保持！";
+            else if (score >= 60) tip = "还可以，再练一轮吧。";
+            else tip = "别灰心，多练几次就熟了。";
+            document.getElementById("scoreTip").textContent = tip;
+
+            document.getElementById("modalMask").classList.remove("hidden");
+        }
+
+        function closeModal() {
+            document.getElementById("modalMask").classList.add("hidden");
+            generateRound();
         }
 
         // ============ 进度条 ============
